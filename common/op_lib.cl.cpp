@@ -45,7 +45,8 @@
 #define __NO_STD_VECTOR //use cl::vector
 #include <CL/cl.h>
 
-#define OP_WARPSIZE 4
+//#define OP_WARPSIZE 4
+#define OP_WARPSIZE 1
 
 //#define ASYNC 1
 #define PROFILE
@@ -133,9 +134,13 @@ void compileProgram ( const char *filename ) {
   char oclFlags[1000];
 
 #if VEC > 1
-  sprintf( oclFlags,  "-cl-mad-enable -cl-fast-relaxed-math -D OP_WARPSIZE=%d -D VEC=%d -D VECTYPE=float%d", OP_WARPSIZE, VEC, VEC );
+//  sprintf( oclFlags,  "-cl-mad-enable -cl-fast-relaxed-math -D OP_WARPSIZE=%d -D VEC=%d -D VECTYPE=float%d", OP_WARPSIZE, VEC, VEC );
+//  sprintf( oclFlags,  "-cl-opt-disable -D OP_WARPSIZE=%d -D VEC=%d -D VECTYPE=float%d", OP_WARPSIZE, VEC, VEC );
+  sprintf( oclFlags,  "-cl-opt-disable -D OP_WARPSIZE=%d -D VEC=%d -D VECTYPE=float%d", OP_WARPSIZE, VEC, VEC );
 #else 
-  sprintf( oclFlags,  "-cl-mad-enable -cl-fast-relaxed-math -D OP_WARPSIZE=%d -D VEC=%d -D VECTYPE=float", OP_WARPSIZE, VEC );
+//  sprintf( oclFlags,  "-cl-mad-enable -cl-fast-relaxed-math -D OP_WARPSIZE=%d -D VEC=%d -D VECTYPE=float", OP_WARPSIZE, VEC );
+//  sprintf( oclFlags,  "-cl-opt-disable -D OP_WARPSIZE=%d -D VEC=%d -D VECTYPE=float", OP_WARPSIZE, VEC );
+  sprintf( oclFlags,  "-cl-opt-disable -D OP_WARPSIZE=%d -D VEC=%d -D VECTYPE=float", OP_WARPSIZE, VEC );
 #endif
 
 
@@ -252,13 +257,19 @@ inline void cutilDeviceInit( int argc, char **argv ) {
   cpPlatform = ( cl_platform_id * ) malloc( sizeof( cl_platform_id ) * ciNumPlatforms );
   ciErrNum = clGetPlatformIDs( ciNumPlatforms, cpPlatform, NULL );
   assert_m( ciErrNum == CL_SUCCESS, "error getting platform IDs" );
+  printf("%d num platforms\n", ciNumPlatforms);
+  for(int i = 0; i < ciNumPlatforms; ++i) {
+    printf("ID %d  ", cpPlatform[i]);
+  }
 
-  ciErrNum = clGetDeviceIDs( cpPlatform[0], CL_DEVICE_TYPE_ALL, 0, NULL, &ciNumDevices );
-  //ciErrNum = clGetDeviceIDs( cpPlatform[0], CL_DEVICE_TYPE_GPU, 0, NULL, &ciNumDevices );
+//  ciErrNum = clGetDeviceIDs( cpPlatform[0], CL_DEVICE_TYPE_ALL, 0, NULL, &ciNumDevices ); 
+  ciErrNum = clGetDeviceIDs( cpPlatform[1], CL_DEVICE_TYPE_ALL, 0, NULL, &ciNumDevices );
+//  ciErrNum = clGetDeviceIDs( cpPlatform[0], CL_DEVICE_TYPE_GPU, 0, NULL, &ciNumDevices );
   LOG( LOG_INFO, "obtained %d devices", ciNumDevices );
   assert_m( ciNumDevices > 0, "no devices found!" );
   cpDevice = ( cl_device_id * ) malloc( sizeof( cl_device_id ) * ciNumDevices );
-  ciErrNum = clGetDeviceIDs( cpPlatform[0], CL_DEVICE_TYPE_ALL, ciNumDevices, cpDevice, NULL );
+//  ciErrNum = clGetDeviceIDs( cpPlatform[0], CL_DEVICE_TYPE_ALL, ciNumDevices, cpDevice, NULL );
+  ciErrNum = clGetDeviceIDs( cpPlatform[1], CL_DEVICE_TYPE_ALL, ciNumDevices, cpDevice, NULL  );
   //ciErrNum = clGetDeviceIDs( cpPlatform[0], CL_DEVICE_TYPE_GPU, ciNumDevices, cpDevice, NULL );
   assert_m( ciErrNum == CL_SUCCESS, "error getting device IDs" );
   LOG( LOG_INFO, "obtained device IDs");

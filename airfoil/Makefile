@@ -104,6 +104,14 @@ double: airfoil_opencl
 vector: airfoil_opencl
 	-ln -fs kernels_vector.cl kernels.cl
 
+single_fixediter: airfoil_opencl
+	-ln -fs kernels_single.fixediterations.cl kernels.cl
+
+single_coalescing: airfoil_opencl
+	-ln -fs kernels_single.working_coalescing.cl kernels.cl
+
+single_noncoalescing: airfoil_opencl
+	-ln -fs kernels_single.working_noncoalescing.cl kernels.cl
 
 #
 # cleanup

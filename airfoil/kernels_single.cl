@@ -10,9 +10,15 @@ struct global_constants {
 #define ZERO_float 0.0f
 #define ROUND_UP(bytes) (((bytes) + 15 ) & ~15 )
 #define MIN(a,b) ((a<b) ? (a) : (b))
-#define cl_amd_printf
-#pragma OPENCL EXTENSION cl_amd_printf : enable
-typedef enum {OP_READ, OP_WRITE, OP_RW, OP_INC, OP_MIN, OP_MAX} op_access;
+//#define cl_amd_printf
+//#pragma OPENCL EXTENSION cl_amd_printf : enable
+//typedef enum {OP_READ, OP_WRITE, OP_RW, OP_INC, OP_MIN, OP_MAX} op_access;
+#define OP_READ 0
+#define OP_WRITE 1
+#define OP_RW 2
+#define OP_INC 3
+#define OP_MIN 4
+#define OP_MAX 5
 inline void bres_calc(
   __local float *x1,  
   __local float *x2,  
@@ -23,6 +29,14 @@ inline void bres_calc(
   __constant struct global_constants *g_const_d ) {
   float dx,dy,mu, ri, p1,vol1, p2,vol2, f;
 
+//  printf("%f\n%f\n%f\n%f\n", x1[0], x1[1], x2[0], x2[1]);
+//  printf("b x1[0] = %f, x1[1] = %f, x2[0] = %f, x2[1] = %f\n", x1[0], x1[1], x2[0], x2[1]);
+//  printf("b q1[0] = %f, q1[1] = %f, q1[2] = %f, q1[3] = %f\n", q1[0], q1[1], q1[2], q1[3]);
+/*  printf("b res1[0] = %f, res1[1] = %f, res1[2] = %f, res1[3] = %f\n", res1[0], res1[1], res1[2], res1[3]); */
+//  printf("%f\n%f\n", adt1, bound);
+//  printf("b adt1 = %f, bound = %f\n", adt1, bound);
+/*  printf("b g_const_d->qinf[0] = %f, g_const_d->qinf[1] = %f, g_const_d->qinf[2] = %f, g_const_d->qinf[3] = %f\n", g_const_d->qinf[0], g_const_d->qinf[1], g_const_d->qinf[2], g_const_d->qinf[3]);
+(*/
   dx = x1[0] - x2[0];
   dy = x1[1] - x2[1];
 
@@ -51,6 +65,9 @@ inline void bres_calc(
     f = 0.5f*(vol1*(q1[3]+p1)     + vol2*(g_const_d->qinf[3]+p2)    ) + mu*(q1[3]-g_const_d->qinf[3]);
     res1[3] += f;
   }
+
+//  printf("%f\n%f\n%f\n%f\n", res1[0], res1[1], res1[2], res1[3]);
+//  printf("a res1[0] = %f, res1[1] = %f, res1[2] = %f, res1[3] = %f\n", res1[0], res1[1], res1[2], res1[3]);
 }
 __kernel void op_cuda_bres_calc(
   __global float *ind_arg0,
@@ -94,23 +111,33 @@ __kernel void op_cuda_bres_calc(
     // get sizes and shift pointers and direct-mapped data
 
     int blockId = blkmap[get_group_id(0) + block_offset];
-
     nelem    = nelems[blockId];
     offset_b = offset[blockId];
 
+//    printf("blockId %d, nelem %d, offset_b %d\n", blockId, nelem, offset_b);
     nelems2  = get_local_size(0)*(1+(nelem-1)/get_local_size(0));
     ncolor   = ncolors[blockId];
+//    printf("blockId %d, nelems2 %d, ncolor %d\n", blockId, nelems2, ncolor);
 
+
+/*    printf("sizeof(ind_arg_sizes) %d\n", sizeof(ind_arg_sizes));
+    for(long i = 0; i < sizeof(ind_arg_sizes)/sizeof(int); ++i) {
+      printf("ind_arg_sizes[%d] = %d ", i, ind_arg_sizes[i]);
+    }
+    printf("\n");
+*/
     ind_arg0_size = ind_arg_sizes[0+blockId*4];
     ind_arg1_size = ind_arg_sizes[1+blockId*4];
     ind_arg2_size = ind_arg_sizes[2+blockId*4];
     ind_arg3_size = ind_arg_sizes[3+blockId*4];
 
+//    printf("blockId %d, arg0_size %d, arg1_size %d, arg2_size %d, arg3_size %d\n", blockId, ind_arg0_size, ind_arg1_size, ind_arg2_size, ind_arg3_size);
+ 
     ind_arg0_map = ind_arg0_maps + ind_arg_offs[0+blockId*4];
     ind_arg1_map = ind_arg1_maps + ind_arg_offs[1+blockId*4];
     ind_arg2_map = ind_arg2_maps + ind_arg_offs[2+blockId*4];
     ind_arg3_map = ind_arg3_maps + ind_arg_offs[3+blockId*4];
-    barrier( CLK_LOCAL_MEM_FENCE ); //not sure if necessary
+//    barrier( CLK_LOCAL_MEM_FENCE ); //not sure if necessary
 
     // set shared memory pointers
     int nelems = 0;
@@ -123,25 +150,33 @@ __kernel void op_cuda_bres_calc(
     ind_arg3_s = &shared[nelems];
   }
 
-  barrier( CLK_LOCAL_MEM_FENCE ); 
+//  barrier( CLK_LOCAL_MEM_FENCE ); 
+
+//  printf("get_local_size : %d\n", get_local_size(0));
 
   // copy indirect datasets into shared memory or zero increment
   for (int n=get_local_id(0); n<ind_arg0_size*2; n+=get_local_size(0))
     ind_arg0_s[n] = ind_arg0[n%2+ind_arg0_map[n/2]*2];
 
-  for (int n=get_local_id(0); n<ind_arg1_size*4; n+=get_local_size(0))
+  for (int n=get_local_id(0); n<ind_arg1_size*4; n+=get_local_size(0)) {
+    long var = n%4 + ind_arg1_map[n/4]*4;
+    //printf("ind_arg1_s[%d] = %f, var = %ld\n", n, ind_arg1[var], var);
     ind_arg1_s[n] = ind_arg1[n%4+ind_arg1_map[n/4]*4];
+  }
 
   for (int n=get_local_id(0); n<ind_arg2_size*1; n+=get_local_size(0))
     ind_arg2_s[n] = ind_arg2[n%1+ind_arg2_map[n/1]*1];
 
-  for (int n=get_local_id(0); n<ind_arg3_size*4; n+=get_local_size(0))
+  for (int n=get_local_id(0); n<ind_arg3_size*4; n+=get_local_size(0)) {
+//    printf("%d\n", n);
     ind_arg3_s[n] = ZERO_float;
+  }
 
   barrier( CLK_LOCAL_MEM_FENCE );
 
   // process set elements
   for (int n=get_local_id(0); n<nelems2; n+=get_local_size(0)) {
+    //printf("processing element %d out of %d and get_local_size %d\n", n, nelems2, get_local_size(0));
     int col2 = -1;
 
     if (n<nelem) {
@@ -149,7 +184,7 @@ __kernel void op_cuda_bres_calc(
       // initialise local variables
       for (int d=0; d<4; d++)
         arg4_l[d] = ZERO_float;
-      barrier( CLK_LOCAL_MEM_FENCE ); //not sure if necessary
+ //     barrier( CLK_LOCAL_MEM_FENCE ); //not sure if necessary
       // user-supplied kernel call
       bres_calc( ind_arg0_s+arg0_maps[n + offset_b]*2,
                  ind_arg0_s+arg1_maps[n + offset_b]*2,
@@ -161,24 +196,29 @@ __kernel void op_cuda_bres_calc(
       col2 = colors[n + offset_b];
     }
 
-    barrier( CLK_LOCAL_MEM_FENCE );
+//    barrier( CLK_LOCAL_MEM_FENCE );
     // store local variables
     int arg4_map = arg4_maps[n + offset_b];
-
-    barrier( CLK_LOCAL_MEM_FENCE );
+    //printf("ncolor %d", ncolor);
+//    barrier( CLK_LOCAL_MEM_FENCE );
     for (int col=0; col<ncolor; col++) {
       if (col2==col) {
-        for (int d=0; d<4; d++)
+        for (int d=0; d<4; d++) {
+          //printf("%d\n", d+arg4_map*4); 
+          //printf("%f\n", ind_arg3_s[d+arg4_map*4]);
           ind_arg3_s[d+arg4_map*4] += arg4_l[d];
+          //printf("%f\n", arg4_l[d]);
+          //printf("%f\n", ind_arg3_s[d+arg4_map*4]);
+        }
       }
-      barrier( CLK_LOCAL_MEM_FENCE );
+//      barrier( CLK_LOCAL_MEM_FENCE );
     }
   }
-
+  barrier( CLK_LOCAL_MEM_FENCE );
   // apply pointered write/increment
   for (int n=get_local_id(0); n<ind_arg3_size*4; n+=get_local_size(0))
     ind_arg3[n%4+ind_arg3_map[n/4]*4] += ind_arg3_s[n];
-  barrier( CLK_LOCAL_MEM_FENCE );
+//  barrier( CLK_LOCAL_MEM_FENCE );
 }
 //template < op_access reduction, class T >
 inline void op_reduction( __global volatile float *dat_g, float dat_l, int reduction, __local float *temp)
@@ -261,7 +301,7 @@ inline void update(float *qold, float *q, float *res, __global float *adt, float
     q[n]   = qold[n] - del;
     res[n] = 0.0f;
     *rms  += del*del;
-    
+//   printf("%f\n", *rms); 
 //  printf("iteration %d: rms = %f, q[%d] = %f\n", n, rms, n, q[n]);
   }
 }
@@ -283,52 +323,60 @@ __kernel void op_cuda_update(
   float arg1_l[4];
   float arg2_l[4];
   float arg4_l[1];
-  for (int d=0; d<1; d++) 
-    arg4_l[d]=ZERO_float;
-
+//  for (int d=0; d<1; d++) 
+//    arg4_l[d]=ZERO_float;
+  arg4_l[0] =  arg4[get_group_id(0)];
 
   int   tid = get_local_id(0)%OP_WARPSIZE;
 
   __local float *arg_s =  shared+ offset_s *(get_local_id(0)/OP_WARPSIZE)/sizeof(float);
   //printf("get_global_id(0) = %d, set_size = %d, get_global_size(0) = %d\n", get_global_id(0), set_size, get_global_size(0));
-  // process set elements
+  // process set elements 
+  //printf("setsize %d\n", set_size);
   for (int n=get_global_id(0); n<set_size; n+=get_global_size(0)) {
 
     int offset = n - tid;
     int nelems = MIN(OP_WARPSIZE,set_size-offset);
 
-    barrier( CLK_LOCAL_MEM_FENCE );
+    //barrier( CLK_LOCAL_MEM_FENCE );
     // copy data into shared memory, then into local
     for (int m=0; m<4; m++)
-      arg_s[tid+m*nelems] = arg0[tid+m*nelems+offset*4];
+//      arg_s[tid+m*nelems] = arg0[tid+m*nelems+offset*4];
+      arg_s[m+4*tid] = arg0[m+4*tid+offset*4];
 
-    barrier( CLK_LOCAL_MEM_FENCE );
+//    barrier( CLK_LOCAL_MEM_FENCE );
 
     for (int m=0; m<4; m++)
-      arg0_l[m] = arg_s[m+tid*4];
-    barrier( CLK_LOCAL_MEM_FENCE );
+      //arg0_l[m] = arg_s[m+tid*4];
+      arg0_l[m] = arg_s[m+4*tid];
+
+    //barrier( CLK_LOCAL_MEM_FENCE );
    
     for (int m=0; m<4; m++)
-      arg_s[tid+m*nelems] = arg1[tid+m*nelems+offset*4];
+      //arg_s[tid+m*nelems] = arg1[tid+m*nelems+offset*4];
+      arg_s[m+4*tid] = arg1[m+4*tid+offset*4];
 
-    barrier( CLK_LOCAL_MEM_FENCE );
+    //barrier( CLK_LOCAL_MEM_FENCE );
 
     for (int m=0; m<4; m++)
-      arg1_l[m] = arg_s[m+tid*4];
+      //arg1_l[m] = arg_s[m+tid*4];
+      arg1_l[m] = arg_s[m+4*tid];
 
-    barrier( CLK_LOCAL_MEM_FENCE );
+//    barrier( CLK_LOCAL_MEM_FENCE );
     for (int m=0; m<4; m++) {
-      arg_s[tid+m*nelems] = arg2[tid+m*nelems+offset*4];
-    //  printf("iteration %d: arg2[%d] = %f\n", m, tid+m*nelems+offset*4, arg2[tid+m*nelems+offset*4]);
+//      arg_s[tid+m*nelems] = arg2[tid+m*nelems+offset*4];
+      arg_s[m+4*tid] = arg2[m+4*tid+offset*4];
+     //  printf("iteration %d: arg2[%d] = %f\n", m, tid+m*nelems+offset*4, arg2[tid+m*nelems+offset*4]);
     //  printf("iteration %d: arg_s[%d] = %f\n", m, tid+m*nelems, arg_s[tid+m*nelems]);
     }
 
-    barrier( CLK_LOCAL_MEM_FENCE );
+//    barrier( CLK_LOCAL_MEM_FENCE );
 
     for (int m=0; m<4; m++) {
-      arg2_l[m] = arg_s[m+tid*4];
+      //arg2_l[m] = arg_s[m+tid*4];
+      arg2_l[m] = arg_s[m+4*tid];
     }
-    barrier( CLK_LOCAL_MEM_FENCE );
+  //  barrier( CLK_LOCAL_MEM_FENCE );
     //printf("Hello, world! ");     
     // user-supplied kernel call
     update( arg0_l,
@@ -336,26 +384,29 @@ __kernel void op_cuda_update(
             arg2_l,
             arg3+n,
             arg4_l );
-    barrier( CLK_LOCAL_MEM_FENCE );
+//    barrier( CLK_LOCAL_MEM_FENCE );
     // copy back into shared memory, then to device
     for (int m=0; m<4; m++)
       arg_s[m+tid*4] = arg1_l[m];
    
-    barrier( CLK_LOCAL_MEM_FENCE );
+    //barrier( CLK_LOCAL_MEM_FENCE );
 
     for (int m=0; m<4; m++)
-      arg1[tid+m*nelems+offset*4] = arg_s[tid+m*nelems];
+      //arg1[tid+m*nelems+offset*4] = arg_s[tid+m*nelems];
+      arg1[m+4*tid+offset*4] = arg_s[m+4*tid];
 
-    barrier( CLK_LOCAL_MEM_FENCE );    
+//    barrier( CLK_LOCAL_MEM_FENCE );    
 
     for (int m=0; m<4; m++)
       arg_s[m+tid*4] = arg2_l[m];
 
-    barrier( CLK_LOCAL_MEM_FENCE );
+//    barrier( CLK_LOCAL_MEM_FENCE );
 
     for (int m=0; m<4; m++)
-      arg2[tid+m*nelems+offset*4] = arg_s[tid+m*nelems];
-    barrier( CLK_LOCAL_MEM_FENCE );
+      //arg2[tid+m*nelems+offset*4] = arg_s[tid+m*nelems];
+      arg2[m+4*tid+offset*4] = arg_s[m+4*tid];
+
+//    barrier( CLK_LOCAL_MEM_FENCE );
 
   }
 
@@ -363,18 +414,19 @@ __kernel void op_cuda_update(
   __local float temp[1600];
 
   for(int d=0; d<1; d++)
-//    op_reduction(&arg4[d+get_group_id(0)*1],arg4_l[d],OP_INC, temp);
-      op_reduction(&arg4[d+get_group_id(0)*1],arg4_l[d],OP_INC, shared);
-  barrier( CLK_LOCAL_MEM_FENCE ); 
+    op_reduction(&arg4[d+get_group_id(0)*1],arg4_l[d],OP_INC, temp);
+//      op_reduction(&arg4[d+get_group_id(0)*1],arg4_l[d],OP_INC, shared);
+//  barrier( CLK_LOCAL_MEM_FENCE ); 
 //  printf("Hello, world! ");
 }
 
 
 inline void adt_calc(__local float *x1,__local float *x2,__local float *x3,__local float *x4,__global float *q,__global float *adt, __constant struct global_constants *g_const_d){
   float dx,dy, ri,u,v,c;
-
+  
   //printf("x1[0] = %f, x1[1] = %f, x2[0] = %f, x2[1] = %f, x3[0] = %f, x3[1] = %f, x4[0] = %f, x4[1] = %f\n", x1[0], x1[1], x2[0], x2[1], x3[0], x3[1], x4[0], x4[1]);
   //printf("q[0] = %f, q[1] = %f, q[2] = %f, q[3] = %f, adt = %f\n", q[0], q[1], q[2], q[3], adt);   
+  float init_adt = *adt;
 
   ri =  1.0f/q[0];
   u  =   ri*q[1];
@@ -401,6 +453,8 @@ inline void adt_calc(__local float *x1,__local float *x2,__local float *x3,__loc
 
   *adt = (*adt) / g_const_d->cfl;
   //printf("final adt value %f\n", adt);
+  //printf("%f\n", *adt);
+  //printf("%0.12f %0.12f %0.12f %0.12f %0.12f %0.12f %0.12f %0.12f %0.12f %0.12f %0.12f %0.12f %0.12f %0.12f\n", x1[0], x1[1], x2[0], x2[1], x3[0], x3[1], x4[0], x4[1], q[0], q[1], q[2], q[3], init_adt, *adt);
 }
 
 __kernel void op_cuda_adt_calc(
@@ -487,40 +541,108 @@ __kernel void op_cuda_save_soln(
   __local float *shared ) {
   //__local  char *shared ) {
   
-//  printf("1");
+  //printf("1");
   float arg0_l[4];
   float arg1_l[4];
   int   tid = get_local_id(0) % OP_WARPSIZE;
 //  printf("OP_WARPSIZE %d, tid %d\n", OP_WARPSIZE, tid);  
   __local float *arg_s = (__local float *) (shared+ offset_s *(get_local_id(0)/OP_WARPSIZE));
 
-  barrier( CLK_LOCAL_MEM_FENCE );
+ // barrier( CLK_LOCAL_MEM_FENCE );
   // process set elements
-  
+  //printf("1");  
 
   //for (int n=get_local_id(0)+get_group_id(0)*get_local_size(0);
   //     n<set_size; n+=get_local_size(0)*get_num_groups(0)) {
   for (int n=get_global_id(0); n<set_size; n+=get_global_size(0)) {
-   printf("executing iteration %d\n", n);
+   //printf("executing iteration %d\n", n);
+//    printf("%d\n", n);
     int offset = n - tid;
     int nelems = MIN(OP_WARPSIZE,set_size-offset);
-    barrier( CLK_LOCAL_MEM_FENCE );
+//    printf("%d before\n", n);
+  //  if (n == 101248) {
+  //    printf("offset %d, n %d, tid %d, nelems %d\n", offset, n, tid, nelems);
+  //  }
+    /*barrier( CLK_LOCAL_MEM_FENCE ); for some, yet unknown reason, this 
+      barrier was causing iteration no 101248 to "die" after this point. 
+      confirmed by having a print statement and conditional statements on 
+      the value of n before and after the barrier. All before were executed 
+      correctly. All after were not.
+      NOTE: this alone does not solve the problem of the last two memory 
+      locations having improper data.
+      NOTE: this barrier also seems unnecessary.*/
     // copy data into shared memory, then into local
+    //if( n == 101248) printf("\n\n101248 reached 1 \n\n");
+   //   printf("%d after\n ", n);
+//    printf("size of arg0_l %ld\n", sizeof(arg0_l));
+   /*
+    //by addressing the arg_s in the tid + m*nelems AND then m + tid *nelems fashion, 
+    //there are data dependencies created between threads - so synchronization is needed.
+    //However, for some reason, the barriers are killing, from what we have seen, the last
+    //two threads. As a result, I am now breaking that dependency and allowing for direct
+    //access in a desperate attempt to fix this code and improve its efficiency (barriers
+    //pretty much doubled the runtime.
+    //for (int m=0; m<4; m++) {
+    //  arg_s[tid+m*nelems] = arg0[offset*4 + tid+m*nelems];
+*/
+    for (int m=0; m<4; m++) {
+      arg_s[m+tid*4] = arg0[offset*4 + m + tid*4];
 
-    
-    for (int m=0; m<4; m++)
-      arg_s[tid+m*nelems] = arg0[offset*4 + tid+m*nelems];
+    /*  if(offset *4 + tid+m*nelems == 404992) {
+        printf("\nI reach the last two addresses\n");
+      }
+      if(offset *4 + tid + m*nelems == 404988) {
+        printf("\n I reach the penultimate last two addressed\n");
+      }*/
 
-    barrier( CLK_LOCAL_MEM_FENCE );
-    for (int m=0; m<4; m++)
-      arg0_l[m] = arg_s[tid*4 + m];
-      
+      //if(n == 101248) printf("\n\n101248 reached\n\n");
+      /*if( n == 101248) {
+        printf("offset %d, n %d, tid %d, m %d, nelems %d\n", offset, n, tid, m, nelems);
+        printf("\n %d \n", offset * 4 + tid + m* nelems);
+        printf("\n %f \n", arg0[offset *4 + tid + m*nelems]);
+      }*/
+  /*    if( n == 101248 || n == 101249) {
+        printf("offset %d, n %d, tid %d, m %d, nelems %d\n", offset, n, tid, m, nelems);
+        printf("\n %d \n", offset *4 +tid + m*nelems);
+        printf("\n %f \n", arg0[offset * 4 + tid + m*nelems]);
+      }*/ /*
+      if(offset *4 + tid + m*nelems == 405001) {
+        printf("\n I SHOULD NOT reach this point\n");
+      }
+      if(offset == 101248 && tid == 0) {
+        printf("Case associated with n=101248 still reached\n\n");
+      } */
+    }
+
+    //barrier( CLK_LOCAL_MEM_FENCE );
+//    for (int m=0; m<4; m++) 
+//      arg0_l[m] = arg_s[tid*4 + m];
+    //This is still part of the fixing attempt.
+    for (int m=0; m<4; m++) {
+      arg0_l[m] = arg_s[m + tid *4];
+    }
+
+  /*  if(n == 101248 || n == 101249) {
+      printf("I HAVE REACHED %d AFTER A BARRIER\n", n);
+    }*/ 
 /*
     for (int m=0; m<4; ++m) {
       arg0_l[m] = arg0[n*4+m];
     }
     */
-    barrier( CLK_LOCAL_MEM_FENCE );
+    //barrier( CLK_LOCAL_MEM_FENCE );
+/*
+    if(n == 101248 || n == 101249) {
+      printf("I HAVE REACHED %d AFTER ANOTHER BARRIER\n", n);
+    }
+
+*/
+
+/*    if( n == 101248 || n == 101249 ) {
+      printf("before n = %d, arg0_l[0] = %f, arg0_l[1] = %f, arg0_l[2] = %f, arg0_l[3] = %f\n", n, arg0_l[0], arg0_l[1], arg0_l[2], arg0_l[3]);
+      printf("before n = %d, arg1_l[0] = %f, arg1_l[1] = %f, arg1_l[2] = %f, arg1_l[3] = %f\n", n, arg1_l[0], arg1_l[1], arg1_l[2], arg1_l[3]);
+    }
+*/
 
     // user-supplied kernel call
 
@@ -532,19 +654,32 @@ __kernel void op_cuda_save_soln(
       arg1[n*4+m] = arg1_l[m];
     }
     */
-
+/*    if( n == 101248 || n == 101249 ) {  
+       //printf("arg0_l[0] = %f, arg0_l[1] = %f, arg0_l[2] = %f, arg0_l[3] = %f\n", arg0_l[0], arg0_l[1], arg0_l[2], arg0_l[3]);
+       printf("n = %d, arg1_l[0] = %f, arg1_l[1] = %f, arg1_l[2] = %f, arg1_l[3] = %f\n", n, arg1_l[0], arg1_l[1], arg1_l[2], arg1_l[3]);
+     }
+*/
     // copy back into shared memory, then to device
 
-    barrier (CLK_LOCAL_MEM_FENCE ); 
-    for (int m=0; m<4; m++)
+    //barrier (CLK_LOCAL_MEM_FENCE ); 
+    for (int m=0; m<4; m++) {
+      //arg_s[m+tid*4] = arg1_l[m];
       arg_s[m+tid*4] = arg1_l[m];
+}
 
-    barrier( CLK_LOCAL_MEM_FENCE );
+    //barrier( CLK_LOCAL_MEM_FENCE );
 
-    for (int m=0; m<4; m++)
-      arg1[tid+m*nelems+offset*4] = arg_s[tid+m*nelems];
+    for (int m=0; m<4; m++) {
+//      arg1[tid+m*nelems+offset*4] = arg_s[tid+m*nelems];
+      arg1[m + tid*4 + offset*4] = arg_s[m+tid*4];
       
-    barrier( CLK_LOCAL_MEM_FENCE );  
+   /*   if( n == 101248 || n == 101249) {
+        printf("after save soln offset %d, n %d, tid %d, m %d, nelems %d\n", offset, n, tid, m, nelems);
+        printf("\n %d \n", offset *4 +tid + m*nelems);
+        printf("\n %f \n", arg1[offset * 4 + tid + m*nelems]);
+      }*/
+    }
+//    barrier( CLK_LOCAL_MEM_FENCE );  
 
   }
 }
@@ -552,6 +687,15 @@ __kernel void op_cuda_save_soln(
 inline void res_calc(__local float *x1, __local float *x2, __local float *q1, __local float *q2,
                      __local float *adt1, __local float *adt2, float *res1, float *res2, __constant struct global_constants *g_const_d) {
   float dx,dy,mu, ri, p1,vol1, p2,vol2, f;
+/*  printf("b x1[0] = %f, x1[1] = %f, x2[0] = %f, x2[1] = %f\n", x1[0], x1[1], x2[0], x2[2]);
+  printf("b q1[0] = %f, q1[1] = %f, q1[2] = %f, q1[3] = %f\n", q1[0], q1[1], q1[2], q1[3]);
+  printf("b q2[0] = %f, q2[1] = %f, q2[2] = %f, q2[3] = %f\n", q2[0], q2[1], q2[2], q2[3]);
+  printf("b adt1 = %f, adt2 = %f\n", adt1, adt2);
+  printf("b res1[0] = %f, res1[1] = %f, res1[2] = %f, res1[3] = %f\n", res1[0], res1[1], res1[2], res1[3]);
+  printf("b res2[0] = %f, res2[1] = %f, res2[2] = %f, res2[3] = %f\n", res2[0], res2[1], res2[2], res2[3]);
+*/
+
+
   dx = x1[0] - x2[0];
   dy = x1[1] - x2[1];
   ri   = 1.0f/q1[0];
@@ -578,6 +722,9 @@ inline void res_calc(__local float *x1, __local float *x2, __local float *q1, __
   f = 0.5f*(vol1*(q1[3]+p1)     + vol2*(q2[3]+p2)    ) + mu*(q1[3]-q2[3]);
   res1[3] += f;
   res2[3] -= f;
+
+//  printf("a res1[0] = %f, res1[1] = %f, res1[2] = %f, res1[3] = %f\n", res1[0], res1[1], res1[2], res1[3]);
+//  printf("a res2[0] = %f, res2[1] = %f, res2[2] = %f, res2[3] = %f\n", res2[0], res2[1], res2[2], res2[3]);
 }
 
 __kernel void op_cuda_res_calc(
@@ -631,6 +778,7 @@ __kernel void op_cuda_res_calc(
 
     nelems2  = get_local_size(0)*(1+(nelem-1)/get_local_size(0));
     ncolor   = ncolors[blockId];
+    ncolor   = ncolors[blockId];
 
     
     ind_arg0_size = ind_arg_sizes[0+blockId*4];
@@ -643,7 +791,7 @@ __kernel void op_cuda_res_calc(
     ind_arg2_map = ind_arg2_maps + ind_arg_offs[2+blockId*4];
     ind_arg3_map = ind_arg3_maps + ind_arg_offs[3+blockId*4];
 
-    barrier( CLK_LOCAL_MEM_FENCE ); //not sure if necessary
+    //barrier( CLK_LOCAL_MEM_FENCE ); //not sure if necessary
     // set shared memory pointers
 
     int nbytes = 0;
@@ -677,7 +825,7 @@ __kernel void op_cuda_res_calc(
         arg6_l[d] = 0.0f;
       for (int d=0; d<4; d++)
         arg7_l[d] = 0.0f;
-      barrier( CLK_LOCAL_MEM_FENCE ); //not sure if necessary
+  //    barrier( CLK_LOCAL_MEM_FENCE ); //not sure if necessary
       // user-supplied kernel call
       res_calc( ind_arg0_s+arg0_maps[n+offset_b]*2,
                 ind_arg0_s+arg1_maps[n+offset_b]*2,
@@ -704,9 +852,10 @@ __kernel void op_cuda_res_calc(
       barrier( CLK_LOCAL_MEM_FENCE );
     }
   }
+  barrier( CLK_LOCAL_MEM_FENCE );
   // apply pointered write/increment
   for (int n=get_local_id(0); n<ind_arg3_size*4; n+=get_local_size(0))
     ind_arg3[n%4+ind_arg3_map[n/4]*4] += ind_arg3_s[n];
-  barrier( CLK_LOCAL_MEM_FENCE );
+//  barrier( CLK_LOCAL_MEM_FENCE );
 }
 

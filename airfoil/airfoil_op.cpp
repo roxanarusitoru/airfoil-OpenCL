@@ -217,8 +217,8 @@ int main(int argc, char **argv){
   fclose(fp);
 
 #ifdef DIAGNOSTIC
-  print_array((float *) x, nnode, "initial_nodes");
-  print_array((float *) cell, ncell, "initial_cells");
+  print_array((float *) x, 2*nnode, "initial_nodes");
+  print_array((float *) cell, 4*ncell, "initial_cells");
  
   FILE *flog;
   flog = fopen( "initial_cells_cellarray", "w" );
@@ -228,9 +228,9 @@ int main(int argc, char **argv){
   fclose( flog );
 
 
-  print_array((float *) edge, nedge, "initial_edges");
-  print_array((float *) ecell, nedge, "initiall_edges_for_cell");
-  print_array((float *) bedge, nbedge, "initial_border_edges");
+  print_array((float *) edge, 2*nedge, "initial_edges");
+  print_array((float *) ecell, 2*nedge, "initiall_edges_for_cell");
+  print_array((float *) bedge, 2*nbedge, "initial_border_edges");
   print_array((float *) becell, nbedge, "initial_becell");
   print_array((float *) bound, nbedge, "initial bound");
 #endif
@@ -307,16 +307,16 @@ int main(int argc, char **argv){
 #ifdef DIAGNOSTIC
   dump_array(p_bound, "initial_dat_p_bound");
   dump_array(p_x, "initial_dat_p_x");
-  dump_array(p_q, "initiall_dat_p_q");
+  dump_array(p_q, "initial_dat_p_q");
   dump_array(p_qold, "initial_dat_p_qold");
   dump_array(p_adt, "initial_dat_p_adt");
   dump_array(p_res, "initial_dat_res");
 #endif
 
 // main time-marching loop
-//  niter = 1000;
+  niter = 1000;
 //  niter = 2;
-  niter = 1;
+//  niter = 1;
   for(int iter=1; iter<=niter; iter++) {
 
 //  save old flow solution
@@ -393,9 +393,11 @@ int main(int argc, char **argv){
 #ifdef DIAGNOSTIC
     if (iter==1 && k==0) {
       dump_array( p_adt, "p_adt0" );
+      dump_array( p_q, "p_q_after_adt_calc0");
     }
     if (iter==1 && k==1) {
       dump_array( p_adt, "p_adt1" );
+      dump_array( p_q, "p_q_after_adt_calc1");
     }
 #endif
   //  dump_array(p_adt, "p_adt_after");
@@ -436,9 +438,11 @@ int main(int argc, char **argv){
 #ifdef DIAGNOSTIC
     if (iter==1 && k==0) {
       dump_array( p_res, "p_res0" );
+      dump_array( p_q, "p_q_after_res_calc0");
     }
     if (iter==1 && k==1) {
       dump_array( p_res, "p_res1" );
+      dump_array( p_q, "p_q_after_res_calc1");
     }
 #endif/*
 if(k == 0 && iter == 1) {
@@ -493,10 +497,12 @@ if(k == 0 && iter == 1) {
       if (iter==1 && k==0) {
         dump_array(p_res, "p_res_update_0");
         dump_array(p_q,"p_q_update_0");
+        printf("rms_1_0 %f\n", rms);
       }
       if (iter==1 && k==1) {
         dump_array(p_res, "p_res_update_1");
         dump_array(p_q,"p_q_update_1");
+        printf("rms_1_1 %f\n", rms);
       }
 #endif
 
@@ -509,10 +515,11 @@ if(k == 0 && iter == 1) {
 #endif
 
 //  print iteration history
-    printf("before %d %10.5e \n", iter, rms);
+//    printf("before rms %f, ncell %d\n", rms, ncell);
+//    printf("before %d %10.5e \n", iter, rms);
     rms = sqrt(rms/(float) ncell);
 
-//    if (iter%100 == 0)
+    if (iter%100 == 0)
       printf("after %d  %10.5e \n",iter,rms);
 
 
@@ -521,9 +528,9 @@ if(k == 0 && iter == 1) {
 
   op_timing_output();
 
-#ifdef DIAGNOSTIC
+//#ifdef DIAGNOSTIC
   dump_array( p_q, "p_q" );
-#endif
+//#endif
 
 
 

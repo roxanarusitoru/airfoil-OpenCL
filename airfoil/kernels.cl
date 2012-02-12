@@ -1,1 +1,1 @@
-kernels_single.cl
+kernels_single.working_noncoalescing.cl
